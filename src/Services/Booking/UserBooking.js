@@ -159,6 +159,8 @@ const addBooking = async (req, res, next) => {
             return;
           }
         });
+    } else {
+      throw "Image is not provided";
     }
   } catch (error) {
     console.log(error);
