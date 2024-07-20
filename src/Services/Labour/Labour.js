@@ -16,6 +16,14 @@ const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
 const region = process.env.REGION;
 const Bucket = process.env.BUCKET;
 
+const client = new S3Client({
+  credentials: {
+    accessKeyId,
+    secretAccessKey,
+  },
+  region,
+});
+
 const addLabour = async (req, res) => {
   try {
     if (req.file) {
@@ -41,15 +49,14 @@ const addLabour = async (req, res) => {
       })
         .done()
         .then(async (data) => {
-          console.log(data);
-          // req.body.labourIdProof = imageName;
-          // await LabourModal.insertMany(req.body)
-          //   .then((dbRes) => {
-          //     res.status(201).send(dbRes);
-          //   })
-          //   .catch((err) => {
-          //     throw "labour insert Operation failed";
-          //   });
+          req.body.labourIdProof = imageName;
+          await LabourModal.insertMany(req.body)
+            .then((dbRes) => {
+              res.status(201).send(dbRes);
+            })
+            .catch((err) => {
+              throw "labour insert Operation failed";
+            });
         })
         .catch((err) => {
           console.log(err);
@@ -71,6 +78,7 @@ const getLabourList = async (req, res) => {
         throw "get Operation failed";
       });
   } catch (error) {
+    console.log(error);
     res.status(500).send(error);
   }
 };
@@ -99,28 +107,95 @@ const markAttendence = async (req, res) => {
   }
 };
 
-const addLabourPost = async (req, res) => {
+const deleteLabour = async (req, res) => {
   try {
-    if (req.body.labourPost === "") {
-      throw "labour post is required";
+    const { labourDeleteId, imgId } = req.params;
+    if (!labourDeleteId) {
+      throw new Error("Delete id is required for deletion");
     }
-    console.log(req.body);
-    // await LabourPostModal({ ...req.body })
-    //   .then((insertRes) => {
-    //     res.status(201).send(insertRes);
-    //   })
-    //   .catch((err) => {
-    //     throw err;
-    //   });
+    if (!imgId) {
+      throw new Error("Image id is required for deletion");
+    }
+
+    const deleteparm = {
+      Bucket,
+      Key: `labour/${imgId}`,
+    };
+    const deleteImageResponse = new DeleteObjectCommand(deleteparm);
+    const deleteResponse = await client.send(deleteImageResponse);
+    if (deleteResponse) {
+      const deletedRecord = await LabourModal.findOneAndDelete({
+        _id: labourDeleteId,
+      });
+      if (!deletedRecord) {
+        return res.status(404).send({ error: "Record not found" });
+      }
+
+      res.status(200).send({ message: "Record deleted successfully" });
+    }
   } catch (error) {
-    console.log(error);
-    res.status(500).send(error);
+    console.error(error);
+    res.status(500).send({ error: "Internal server error" });
+  }
+};
+
+const updateLabour = async (req, res) => {
+  try {
+    console.log(req.body);
+    let updatedId = "";
+    if (req.file) {
+      let fileName = req.file.originalname.split(".");
+      const myFileType = fileName[fileName.length - 1];
+      const imageName = `${uuidv4()}.${myFileType}`;
+      updatedId = imageName;
+      const updateImageKey = `labour/${imageName}`;
+      const deleteParams = {
+        Bucket,
+        Key: `labour/${req.body.oldProofId}`,
+      };
+      console.log(deleteParams, " <>?");
+      const deleteCommand = new DeleteObjectCommand(deleteParams);
+      const deleteObject = await client.send(deleteCommand);
+      if (!deleteObject) {
+        return res
+          .status(500)
+          .json({ message: "Delete image operation failed" });
+      }
+      const updateParams = {
+        Bucket: process.env.BUCKET,
+        Key: updateImageKey,
+        Body: req.file.buffer,
+        ACL: "public-read-write",
+      };
+      console.log(updateParams);
+      const updateCommand = new PutObjectCommand(updateParams);
+
+      const updateResponse = await client.send(updateCommand);
+      if (!updateResponse) {
+        return res
+          .status(500)
+          .json({ message: "Update image operation failed" });
+      }
+    }
+    const { _id, oldProofId, ...restProps } = req.body;
+    restProps.labourIdProof = updatedId;
+    await LabourModal.findByIdAndUpdate({ _id: _id }, { ...restProps })
+      .then((updateRes) => {
+        res.status(200).send({ message: "Record updated successfully" });
+      })
+      .catch((err) => {
+        throw err;
+      });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ error: "Internal server error" });
   }
 };
 
 module.exports = {
   addLabour,
+  deleteLabour,
   getLabourList,
   markAttendence,
-  addLabourPost,
+  updateLabour,
 };
