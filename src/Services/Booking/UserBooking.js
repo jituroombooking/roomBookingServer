@@ -10,6 +10,8 @@ const { v4: uuidv4 } = require("uuid");
 const RoomModal = require("../Room/RoomModal");
 const BookingModal = require("./UserBookingModal");
 const ActualRoom = require("../Rooms/RoomsModal");
+const roomsModal = require("../Rooms/RoomsModal");
+const UserRoomMappingModel = require("../UserRoomMapping/UserRoomMappingModel");
 
 const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
 const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
@@ -19,6 +21,9 @@ const Bucket = process.env.BUCKET;
 const addBooking = async (req, res, next) => {
   try {
     console.log(req.file);
+    const userRoomMapping = [];
+    const updatedArray = [];
+
     if (req.file) {
       let fileName = req.file.originalname.split(".");
       const myFileType = fileName[fileName.length - 1];
@@ -77,7 +82,7 @@ const addBooking = async (req, res, next) => {
             res.end();
             return;
           }
-          const updatedArray = [];
+
           const actualRooms = await ActualRoom.find({ availabel: true });
           let finalFamilyNum = familyMember;
           if (familyMember !== 0 && actualRooms) {
@@ -85,7 +90,12 @@ const addBooking = async (req, res, next) => {
               let Obj = m.bookerIds;
               const bookedNumber = m.bookerIds.length;
               const availableBed = m.noOfBed - bookedNumber;
+              const userRoomMappingObj = {};
               if (availableBed > 0) {
+                userRoomMappingObj.bhavanId = m.bhavanId;
+                userRoomMappingObj.roomId = m._id;
+                userRoomMappingObj.userId = userBookingModal[0]._id;
+                userRoomMapping.push(userRoomMappingObj);
                 for (let i = 0; i < availableBed; i++) {
                   if (finalFamilyNum > 0) {
                     finalFamilyNum = finalFamilyNum - 1;
@@ -152,7 +162,14 @@ const addBooking = async (req, res, next) => {
               res.end();
               return;
             }
-            res.status(200).send("insert Operation Sucessfull");
+            console.log(userRoomMapping, " <>?");
+            await UserRoomMappingModel.insertMany(userRoomMapping)
+              .then((insertRes) => {
+                res.status(200).send("insert Operation Sucessfull");
+              })
+              .catch((err) => {
+                throw err;
+              });
           } else {
             res.status(400).send("Getting room data failed");
             res.end();
@@ -170,13 +187,50 @@ const addBooking = async (req, res, next) => {
 
 const getBookedRooms = async (req, res) => {
   try {
-    await BookingModal.find({})
-      .then((dbRes) => {
-        res.status(200).send(dbRes);
+    await UserRoomMappingModel.aggregate([
+      {
+        $lookup: {
+          from: "actualrooms",
+          localField: "roomId",
+          foreignField: "_id",
+          as: "roomData",
+        },
+      },
+      {
+        $lookup: {
+          from: "userbookings",
+          localField: "userId",
+          foreignField: "_id",
+          as: "userBookingData",
+        },
+      },
+      {
+        $lookup: {
+          from: "rooms",
+          localField: "bhavanId",
+          foreignField: "_id",
+          as: "bhavanData",
+        },
+      },
+      { $unwind: "$roomData" },
+      { $unwind: "$userBookingData" },
+      { $unwind: "$bhavanData" },
+    ])
+      .then((getRes) => {
+        res.status(200).send(getRes);
+        console.log(getRes, " <>?");
       })
       .catch((err) => {
-        throw "get room bboking operation failed";
+        throw "get room booking operation failed";
       });
+
+    // await BookingModal.find({})
+    //   .then((dbRes) => {
+    //     res.status(200).send(dbRes);
+    //   })
+    //   .catch((err) => {
+    //     throw "get room bboking operation failed";
+    //   });
   } catch (error) {
     console.log(error);
     res.status(500).send(error);

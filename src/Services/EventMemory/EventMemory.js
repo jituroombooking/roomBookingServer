@@ -81,7 +81,88 @@ const getEventMemory = async (req, res) => {
   }
 };
 
+const editEventMemory = async (req, res) => {
+  try {
+    console.log(req.body);
+    let newImageName = "";
+    if (req.file) {
+      let fileName = req.file.originalname.split(".");
+      const myFileType = fileName[fileName.length - 1];
+      const imageName = `${uuidv4()}.${myFileType}`;
+      newImageName = imageName;
+      const deleteParams = {
+        Bucket,
+        Key: `event/${req.body.oldImg}`,
+      };
+      const deleteCommand = new DeleteObjectCommand(deleteParams);
+      const deleteObject = await client.send(deleteCommand);
+      if (!deleteObject) {
+        return res
+          .status(500)
+          .json({ message: "Delete image operation failed" });
+      }
+      const updateParams = {
+        Bucket: process.env.BUCKET,
+        Key: `event/${newImageName}`,
+        Body: req.file.buffer,
+        ACL: "public-read-write",
+      };
+      const updateCommand = new PutObjectCommand(updateParams);
+      const updateResponse = await client.send(updateCommand);
+      if (!updateResponse) {
+        return res
+          .status(500)
+          .json({ message: "Update image operation failed" });
+      }
+      req.body.eventImg = newImageName;
+    }
+    await EventMemoryModal.findByIdAndUpdate(
+      { _id: req.body._id },
+      { ...req.body }
+    )
+      .then((updateRes) => {
+        res.status(200).send(req.body);
+      })
+      .catch((err) => {
+        throw err;
+      });
+  } catch (error) {
+    console.log(error);
+    res.status(500).send(error);
+  }
+};
+
+const deleteEventMemory = async (req, res) => {
+  try {
+    const { objId, imgId } = req.params;
+    if (!objId || !imgId) {
+      return res.status(500).json({ message: "Id is required for deletion" });
+    }
+    const deleteParams = {
+      Bucket,
+      Key: `event/${imgId}`,
+    };
+    const deleteCommand = new DeleteObjectCommand(deleteParams);
+    const deleteObject = await client.send(deleteCommand);
+    if (!deleteObject) {
+      return res.status(500).json({ message: "Delete image operation failed" });
+    }
+    const deletedRecord = await EventMemoryModal.findOneAndDelete({
+      _id: objId,
+    });
+    if (!deletedRecord) {
+      return res.status(404).send({ error: "Record not found" });
+    }
+    res.status(200).send(objId);
+  } catch (error) {
+    console.log(error);
+    res.status(500).send(error);
+  }
+};
+
 module.exports = {
   addEventMemory,
+  deleteEventMemory,
+  editEventMemory,
   getEventMemory,
 };
