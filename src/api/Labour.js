@@ -22,5 +22,6 @@ router.post("/addLabourPost", LabourPost.addLabourPost);
 router.get("/labourPost", LabourPost.getLabourPost);
 router.delete("/deletePost/:deleteId", LabourPost.deletePost);
 router.put("/update", upload, Labour.updateLabour);
+router.post("/paid", Labour.markAsPaid);
 
 module.exports = router;

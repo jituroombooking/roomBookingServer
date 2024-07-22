@@ -192,10 +192,29 @@ const updateLabour = async (req, res) => {
   }
 };
 
+const markAsPaid = async (req, res) => {
+  try {
+    console.log(req.body);
+    const { firstDay, ...restProps } = req.body;
+    restProps.monthPaid.push(firstDay);
+    await LabourModal.findOneAndUpdate({ _id: restProps._id }, { ...restProps })
+      .then((addRes) => {
+        res.status(200).send(restProps);
+      })
+      .catch((err) => {
+        throw err;
+      });
+  } catch (error) {
+    console.log(error);
+    res.status(500).send(error);
+  }
+};
+
 module.exports = {
   addLabour,
   deleteLabour,
   getLabourList,
   markAttendence,
+  markAsPaid,
   updateLabour,
 };

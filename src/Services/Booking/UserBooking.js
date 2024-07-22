@@ -84,20 +84,35 @@ const addBooking = async (req, res, next) => {
           }
 
           const actualRooms = await ActualRoom.find({ availabel: true });
-          let finalFamilyNum = familyMember;
-          if (familyMember !== 0 && actualRooms) {
+          let finalFamilyNum = parseInt(familyMember);
+          if (parseInt(familyMember) !== 0 && actualRooms) {
+            console.log(actualRooms, " <>? Actula Room");
             actualRooms.map(async (m) => {
               let Obj = m.bookerIds;
               const bookedNumber = m.bookerIds.length;
               const availableBed = m.noOfBed - bookedNumber;
               const userRoomMappingObj = {};
               if (availableBed > 0) {
-                userRoomMappingObj.bhavanId = m.bhavanId;
-                userRoomMappingObj.roomId = m._id;
-                userRoomMappingObj.userId = userBookingModal[0]._id;
-                userRoomMapping.push(userRoomMappingObj);
                 for (let i = 0; i < availableBed; i++) {
                   if (finalFamilyNum > 0) {
+                    if (
+                      userRoomMapping.length === 0 ||
+                      userRoomMapping.some((item) => {
+                        console.log(
+                          item.roomId.toString(),
+                          " !== ",
+                          m._id.toString(),
+                          " <>? ",
+                          item.roomId.toString() !== m._id.toString()
+                        );
+                        return item.roomId.toString() !== m._id.toString();
+                      })
+                    ) {
+                      userRoomMappingObj.bhavanId = m.bhavanId;
+                      userRoomMappingObj.roomId = m._id;
+                      userRoomMappingObj.userId = userBookingModal[0]._id;
+                      userRoomMapping.push(userRoomMappingObj);
+                    }
                     finalFamilyNum = finalFamilyNum - 1;
                     Obj.push({
                       id: userBookingModal[0]._id,
@@ -121,6 +136,8 @@ const addBooking = async (req, res, next) => {
                 });
               }
             });
+
+            console.log(userRoomMapping, " <>? MAIN");
             let count = 0;
             updatedArray.map(async (updateM) => {
               await ActualRoom.findByIdAndUpdate(
@@ -217,8 +234,41 @@ const getBookedRooms = async (req, res) => {
       { $unwind: "$bhavanData" },
     ])
       .then((getRes) => {
-        res.status(200).send(getRes);
-        console.log(getRes, " <>?");
+        // console.log(getRes, " <>?");
+        const finalData = new Map();
+
+        getRes.map((m) => {
+          // console.log(m);
+          if (!finalData.get(m.userId.toString())) {
+            const { roomData, userBookingData, bhavanData, ...restProps } = m;
+            finalData.set(m.userId.toString(), {
+              roomData: [roomData],
+              userBookingData,
+              bhavanData: [bhavanData],
+              ...restProps,
+            });
+          } else if (
+            finalData.get(m.userId.toString()).userId.toString() ===
+            m.userId.toString()
+          ) {
+            const { roomData, userBookingData, bhavanData, ...restProps } =
+              finalData.get(m.userId.toString());
+            roomData.push(m.roomData);
+            bhavanData.push(m.bhavanData);
+            finalData.set(m.userId.toString(), {
+              roomData,
+              userBookingData,
+              bhavanData,
+              ...restProps,
+            });
+          }
+        });
+
+        const resArray = Array.from(finalData, ([name, value]) => ({
+          ...value,
+        }));
+
+        res.status(200).send(resArray);
       })
       .catch((err) => {
         throw "get room booking operation failed";

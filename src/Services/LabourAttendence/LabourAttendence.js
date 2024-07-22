@@ -5,7 +5,6 @@ const getAttendence = async (req, res) => {
     if (!req.params.id || !req.params.firstDay || !req.params.lastDay) {
       throw "Id,first day or last is required for getting reqested data";
     }
-    console.log(new Date("2024-07-06T18:30:00.000Z"));
     await LabourModal.find({
       labourId: req.params.id,
       $and: [
