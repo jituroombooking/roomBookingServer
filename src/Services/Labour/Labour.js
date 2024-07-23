@@ -210,10 +210,29 @@ const markAsPaid = async (req, res) => {
   }
 };
 
+const getSingleLabour = async (req, res) => {
+  try {
+    if (!req.params.id) {
+      throw "Id is required for fetching";
+    }
+    await LabourModal.findOne({ _id: req.params.id })
+      .then((getRes) => {
+        res.status(200).send(getRes);
+      })
+      .catch((err) => {
+        throw err;
+      });
+  } catch (error) {
+    console.log(error);
+    res.status(500).send(error);
+  }
+};
+
 module.exports = {
   addLabour,
   deleteLabour,
   getLabourList,
+  getSingleLabour,
   markAttendence,
   markAsPaid,
   updateLabour,
