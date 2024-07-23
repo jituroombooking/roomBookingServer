@@ -306,10 +306,29 @@ const deleteBooking = async (req, res) => {
   }
 };
 
+const getUnAlottedMember = async (req, res) => {
+  try {
+    await BookingModal.find({
+      $expr: { $ne: ["familyMember", "memberAllotted"] },
+    })
+      .sort({ familyMember: -1 })
+      .then((getRes) => {
+        res.status(200).send(getRes);
+      })
+      .catch((err) => {
+        throw err;
+      });
+  } catch (error) {
+    console.log(error);
+    res.status(500).send(error);
+  }
+};
+
 module.exports = {
   addBooking,
   getBookedRooms,
   deleteBooking,
+  getUnAlottedMember,
 };
 
 // const bookRoomsForPeople = (

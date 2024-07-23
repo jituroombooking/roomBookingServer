@@ -16,5 +16,6 @@ const router = express.Router();
 router.post("/addBooking", upload, Booking.addBooking);
 router.get("/getRooms", Booking.getBookedRooms);
 router.delete("/deleteBookedRoom/:deleteId", Booking.deleteBooking);
+router.get("/unAlottedMember", Booking.getUnAlottedMember);
 
 module.exports = router;
