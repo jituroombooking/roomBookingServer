@@ -10,8 +10,8 @@ const { v4: uuidv4 } = require("uuid");
 const RoomModal = require("../Room/RoomModal");
 const BookingModal = require("./UserBookingModal");
 const ActualRoom = require("../Rooms/RoomsModal");
-const roomsModal = require("../Rooms/RoomsModal");
 const UserRoomMappingModel = require("../UserRoomMapping/UserRoomMappingModel");
+const { default: mongoose } = require("mongoose");
 
 const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
 const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
@@ -20,7 +20,6 @@ const Bucket = process.env.BUCKET;
 
 const addBooking = async (req, res, next) => {
   try {
-    console.log(req.file);
     const userRoomMapping = [];
     const updatedArray = [];
 
@@ -86,7 +85,6 @@ const addBooking = async (req, res, next) => {
           const actualRooms = await ActualRoom.find({ availabel: true });
           let finalFamilyNum = parseInt(familyMember);
           if (parseInt(familyMember) !== 0 && actualRooms) {
-            console.log(actualRooms, " <>? Actula Room");
             actualRooms.map(async (m) => {
               let Obj = m.bookerIds;
               const bookedNumber = m.bookerIds.length;
@@ -98,13 +96,6 @@ const addBooking = async (req, res, next) => {
                     if (
                       userRoomMapping.length === 0 ||
                       userRoomMapping.some((item) => {
-                        console.log(
-                          item.roomId.toString(),
-                          " !== ",
-                          m._id.toString(),
-                          " <>? ",
-                          item.roomId.toString() !== m._id.toString()
-                        );
                         return item.roomId.toString() !== m._id.toString();
                       })
                     ) {
@@ -121,7 +112,6 @@ const addBooking = async (req, res, next) => {
                     });
                   }
                 }
-                console.log(m.noOfBed > Obj.length, " <>? ");
                 updatedArray.push({
                   _id: m._id,
                   roomNumber: m.roomNumber,
@@ -137,7 +127,6 @@ const addBooking = async (req, res, next) => {
               }
             });
 
-            console.log(userRoomMapping, " <>? MAIN");
             let count = 0;
             updatedArray.map(async (updateM) => {
               await ActualRoom.findByIdAndUpdate(
@@ -161,7 +150,6 @@ const addBooking = async (req, res, next) => {
                   return;
                 });
             });
-            console.log(count, " <>?");
             const remaningMemberinsert = await BookingModal.findByIdAndUpdate(
               {
                 _id: userBookingModal[0]._id,
@@ -179,7 +167,6 @@ const addBooking = async (req, res, next) => {
               res.end();
               return;
             }
-            console.log(userRoomMapping, " <>?");
             await UserRoomMappingModel.insertMany(userRoomMapping)
               .then((insertRes) => {
                 res.status(200).send("insert Operation Sucessfull");
@@ -234,11 +221,9 @@ const getBookedRooms = async (req, res) => {
       { $unwind: "$bhavanData" },
     ])
       .then((getRes) => {
-        // console.log(getRes, " <>?");
         const finalData = new Map();
 
         getRes.map((m) => {
-          // console.log(m);
           if (!finalData.get(m.userId.toString())) {
             const { roomData, userBookingData, bhavanData, ...restProps } = m;
             finalData.set(m.userId.toString(), {
@@ -291,9 +276,7 @@ const deleteBooking = async (req, res) => {
   try {
     if (req.params.deleteId) {
       await ActualRoom.find({}).then((getRoomRes) => {
-        getRoomRes.map((m) => {
-          console.log(m, " <>?");
-        });
+        getRoomRes.map((m) => {});
       });
       // await BookingModal.findById(req.params.deleteId).then((deleteDataRes) => {
       //   console.log(deleteDataRes);
@@ -308,9 +291,15 @@ const deleteBooking = async (req, res) => {
 
 const getUnAlottedMember = async (req, res) => {
   try {
-    await BookingModal.find({
-      $expr: { $ne: ["familyMember", "memberAllotted"] },
-    })
+    await BookingModal.aggregate([
+      {
+        $match: {
+          $expr: {
+            $ne: ["$familyMember", "$memberAllotted"],
+          },
+        },
+      },
+    ])
       .sort({ familyMember: -1 })
       .then((getRes) => {
         res.status(200).send(getRes);
@@ -324,33 +313,75 @@ const getUnAlottedMember = async (req, res) => {
   }
 };
 
+const editRoom = async (req, res) => {
+  try {
+    const {
+      roomId,
+      userId,
+      bhavanData,
+      _id: newUserId,
+      bookingFrom,
+      bookingTill,
+      removePosition,
+    } = req.body;
+
+    if (
+      !roomId ||
+      !userId ||
+      !bhavanData ||
+      !newUserId ||
+      !bookingFrom ||
+      !bookingTill ||
+      typeof removePosition === "undefined"
+    ) {
+      throw "roomId, userId, newUserId, bookingFrom, bookingTill, removePosition or bhavanData is required ";
+    }
+    await ActualRoom.findOne({ _id: req.body.roomId })
+      .then(async (getRes) => {
+        getRes.bookerIds[removePosition] = {
+          id: new mongoose.Types.ObjectId(newUserId),
+          bookingFrom,
+          bookingTill,
+        };
+
+        return getRes.save();
+      })
+      .then(async (updatedDoc) => {
+        console.log(updatedDoc);
+        await UserRoomMappingModel.findOneAndUpdate(
+          { roomId: roomId, userId: userId },
+          { $set: { userId: new mongoose.Types.ObjectId(newUserId) } },
+          { new: true }
+        )
+          .then(async (updateRes) => {
+            await BookingModal.findOneAndUpdate(
+              { _id: newUserId },
+              { $inc: { memberAllotted: 1 } }
+            )
+              .then((incrementRes) => {
+                res.status(200).send(updateRes);
+              })
+              .catch((err) => {
+                throw err;
+              });
+          })
+          .catch((err) => {
+            throw err;
+          });
+      })
+      .catch((err) => {
+        throw err;
+      });
+  } catch (error) {
+    console.log(error);
+    res.status(500).send(error);
+  }
+};
+
 module.exports = {
   addBooking,
+  editRoom,
   getBookedRooms,
   deleteBooking,
   getUnAlottedMember,
 };
-
-// const bookRoomsForPeople = (
-//   familyNumber,
-//   roomArrData,
-//   bookerId,
-//   bookingFrom,
-//   bookingTill
-// ) => {
-//   // let familyMemberNum = familyNumber;
-//   if (familyNumber > 0) {
-//     familyNumber = familyNumber - 1;
-//     console.log("COUNT <>? ", familyNumber);
-//     bookRoomsForPeople(
-//       familyNumber,
-//       roomArrData,
-//       bookerId,
-//       bookingFrom,
-//       bookingTill
-//     );
-//   } else {
-//     console.log(roomArrData, " <>? ", familyNumber, " ELASE");
-//     return roomArrData;
-//   }
-// };
