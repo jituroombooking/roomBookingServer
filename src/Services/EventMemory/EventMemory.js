@@ -24,7 +24,6 @@ const client = new S3Client({
 
 const addEventMemory = (req, res) => {
   try {
-    console.log(req.body);
     if (req.file) {
       let fileName = req.file.originalname.split(".");
       const myFileType = fileName[fileName.length - 1];

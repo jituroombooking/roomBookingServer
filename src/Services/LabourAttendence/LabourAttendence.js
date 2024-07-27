@@ -13,7 +13,6 @@ const getAttendence = async (req, res) => {
       ],
     })
       .then((findByIdRes) => {
-        console.log(findByIdRes);
         res.status(200).send(findByIdRes);
       })
       .catch((err) => {

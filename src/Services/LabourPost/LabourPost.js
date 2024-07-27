@@ -5,7 +5,6 @@ const addLabourPost = async (req, res) => {
     if (req.body.labourPost === "") {
       throw "labour post is required";
     }
-    console.log(req.body);
     await LabourPostModal.insertMany({ labourPost: req.body.labourPost })
       .then((insertRes) => {
         res.status(201).send(insertRes);

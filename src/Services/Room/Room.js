@@ -107,7 +107,6 @@ const getRoomCount = async (req, res) => {
 
 const updateRoom = async (req, res) => {
   try {
-    console.log(req.body);
     if (!req.body._id) {
       throw "Id is required for updating";
     }
@@ -196,7 +195,6 @@ const viewSingleRoom = async (req, res, next) => {
             }
           })
           .catch((err) => {
-            console.log(err, " MAIN <>?");
             throw "find operation failed";
           });
       });

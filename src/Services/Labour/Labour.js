@@ -153,7 +153,6 @@ const updateLabour = async (req, res) => {
         Bucket,
         Key: `labour/${req.body.oldProofId}`,
       };
-      console.log(deleteParams, " <>?");
       const deleteCommand = new DeleteObjectCommand(deleteParams);
       const deleteObject = await client.send(deleteCommand);
       if (!deleteObject) {
@@ -167,7 +166,6 @@ const updateLabour = async (req, res) => {
         Body: req.file.buffer,
         ACL: "public-read-write",
       };
-      console.log(updateParams);
       const updateCommand = new PutObjectCommand(updateParams);
 
       const updateResponse = await client.send(updateCommand);

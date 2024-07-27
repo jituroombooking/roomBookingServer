@@ -68,7 +68,6 @@ const addBooking = async (req, res, next) => {
           const userBookingModal = await BookingModal.insertMany({
             fullName,
             familyMember,
-            identityProof,
             bookingFrom,
             bookingTill,
             mobileNumber,
@@ -139,9 +138,7 @@ const addBooking = async (req, res, next) => {
                   bookerIds: [...updateM.bookerIds],
                 }
               )
-                .then((res) => {
-                  console.log(res, " <>?");
-                })
+                .then((res) => {})
                 .catch((err) => {
                   res
                     .status(500)
@@ -221,8 +218,8 @@ const getBookedRooms = async (req, res) => {
       { $unwind: "$bhavanData" },
     ])
       .then((getRes) => {
+        console.log(getRes);
         const finalData = new Map();
-
         getRes.map((m) => {
           if (!finalData.get(m.userId.toString())) {
             const { roomData, userBookingData, bhavanData, ...restProps } = m;
@@ -279,7 +276,6 @@ const deleteBooking = async (req, res) => {
         getRoomRes.map((m) => {});
       });
       // await BookingModal.findById(req.params.deleteId).then((deleteDataRes) => {
-      //   console.log(deleteDataRes);
       //   res.status(200).send(req.params.deleteId);
       // });
     }
@@ -328,13 +324,12 @@ const editRoom = async (req, res) => {
     if (
       !roomId ||
       !userId ||
-      !bhavanData ||
       !newUserId ||
       !bookingFrom ||
       !bookingTill ||
       typeof removePosition === "undefined"
     ) {
-      throw "roomId, userId, newUserId, bookingFrom, bookingTill, removePosition or bhavanData is required ";
+      throw "roomId, userId, newUserId, bookingFrom, bookingTill or removePosition  is required ";
     }
     await ActualRoom.findOne({ _id: req.body.roomId })
       .then(async (getRes) => {
@@ -347,7 +342,6 @@ const editRoom = async (req, res) => {
         return getRes.save();
       })
       .then(async (updatedDoc) => {
-        console.log(updatedDoc);
         await UserRoomMappingModel.findOneAndUpdate(
           { roomId: roomId, userId: userId },
           { $set: { userId: new mongoose.Types.ObjectId(newUserId) } },
@@ -378,10 +372,117 @@ const editRoom = async (req, res) => {
   }
 };
 
+const editRoomNewUser = async (req, res) => {
+  try {
+    console.log(req.body);
+    const {
+      roomId,
+      removePosition,
+      bookingFrom,
+      bookingTill,
+      fullName,
+      mobileNumber,
+      userId,
+      familyMember,
+    } = req.body;
+    if (req.file) {
+      let fileName = req.file.originalname.split(".");
+      const myFileType = fileName[fileName.length - 1];
+      const imageName = `${uuidv4()}.${myFileType}`;
+      const Key = `userbooking/${imageName}`;
+      new Upload({
+        client: new S3Client({
+          credentials: {
+            accessKeyId,
+            secretAccessKey,
+          },
+          region,
+        }),
+        params: {
+          ACL: "public-read-write",
+          Bucket,
+          Key,
+          Body: req.file.buffer,
+          ContentType: req.file.mimetype,
+        },
+      })
+        .done()
+        .then(async (data) => {
+          if (
+            fullName === "" ||
+            familyMember === 0 ||
+            bookingFrom === "" ||
+            bookingTill === "" ||
+            mobileNumber === ""
+          ) {
+            res.status(400).send("Please send the required data");
+            res.end();
+            return;
+          }
+          const userBookingModal = await BookingModal.insertMany({
+            fullName,
+            familyMember,
+            bookingFrom,
+            bookingTill,
+            mobileNumber,
+            memberAllotted: 1,
+            identityProof: imageName,
+          });
+          if (!userBookingModal) {
+            res
+              .status(500)
+              .send("insert Operation failed for User room booking");
+            res.end();
+            return;
+          }
+          await ActualRoom.findOne({ _id: roomId })
+            .then(async (getRes) => {
+              getRes.bookerIds[parseInt(removePosition)] = {
+                id: new mongoose.Types.ObjectId(userBookingModal[0]._id),
+                bookingFrom,
+                bookingTill,
+              };
+
+              return getRes.save();
+            })
+            .then(async (updatedDoc) => {
+              await UserRoomMappingModel.findOneAndUpdate(
+                { roomId: roomId, userId: userId },
+                {
+                  $set: {
+                    userId: new mongoose.Types.ObjectId(
+                      userBookingModal[0]._id
+                    ),
+                  },
+                },
+                { new: true }
+              )
+                .then(async (insertRes) => {
+                  res.status(200).send("Rooom Updated Sucessfully");
+                })
+                .catch((err) => {
+                  throw err;
+                });
+            })
+            .catch((err) => {
+              throw err;
+            });
+        })
+        .catch((err) => {
+          throw err;
+        });
+    }
+  } catch (error) {
+    console.log(error);
+    res.status(500).send(error);
+  }
+};
+
 module.exports = {
   addBooking,
+  deleteBooking,
+  editRoomNewUser,
   editRoom,
   getBookedRooms,
-  deleteBooking,
   getUnAlottedMember,
 };
