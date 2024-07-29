@@ -372,7 +372,7 @@ const editRoomNewUser = async (req, res) => {
   try {
     const {
       roomId,
-      removePosition,
+      bhavanId,
       bookingFrom,
       bookingTill,
       fullName,
@@ -420,7 +420,7 @@ const editRoomNewUser = async (req, res) => {
             bookingFrom,
             bookingTill,
             mobileNumber,
-            memberAllotted: 1,
+            memberAllotted: familyMember,
             identityProof: imageName,
           });
           if (!userBookingModal) {
@@ -430,38 +430,29 @@ const editRoomNewUser = async (req, res) => {
             res.end();
             return;
           }
-          await ActualRoom.findOne({ _id: roomId })
-            .then(async (getRes) => {
-              getRes.bookerIds[parseInt(removePosition)] = {
+          for (let i = 0; i < familyMember; i++) {
+            await UserRoomMappingModel.insertMany({
+              roomId: roomId,
+              bhavanId,
+              userId: new mongoose.Types.ObjectId(userBookingModal[0]._id),
+            });
+          }
+          const updateActualRoom = await ActualRoom.findOne({
+            _id: roomId,
+          }).then(async (getRes) => {
+            for (let i = 0; i < familyMember; i++) {
+              getRes.bookerIds.push({
                 id: new mongoose.Types.ObjectId(userBookingModal[0]._id),
                 bookingFrom,
                 bookingTill,
-              };
-
-              return getRes.save();
-            })
-            .then(async (updatedDoc) => {
-              await UserRoomMappingModel.findOneAndUpdate(
-                { roomId: roomId, userId: userId },
-                {
-                  $set: {
-                    userId: new mongoose.Types.ObjectId(
-                      userBookingModal[0]._id
-                    ),
-                  },
-                },
-                { new: true }
-              )
-                .then(async (insertRes) => {
-                  res.status(200).send("Rooom Updated Sucessfully");
-                })
-                .catch((err) => {
-                  throw err;
-                });
-            })
-            .catch((err) => {
-              throw err;
-            });
+              });
+            }
+            getRes.availabel = false;
+            return getRes.save();
+          });
+          if (updateActualRoom) {
+            res.status(200).send("Rooom Updated Sucessfully");
+          }
         })
         .catch((err) => {
           throw err;
