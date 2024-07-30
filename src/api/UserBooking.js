@@ -19,5 +19,9 @@ router.delete("/deleteBookedRoom/:deleteId", Booking.deleteBooking);
 router.get("/unAlottedMember", Booking.getUnAlottedMember);
 router.put("/editRoom", Booking.editRoom);
 router.put("/editRoomWithNewUser", upload, Booking.editRoomNewUser);
+router.delete(
+  "/deleteRoom/:userId/:roomId/:bhavanId",
+  Booking.deleteBookedRoom
+);
 
 module.exports = router;

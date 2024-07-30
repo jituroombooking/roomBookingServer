@@ -6,12 +6,12 @@ const {
 } = require("@aws-sdk/client-s3");
 const { Upload } = require("@aws-sdk/lib-storage");
 const { v4: uuidv4 } = require("uuid");
+const { default: mongoose } = require("mongoose");
 
 const RoomModal = require("../Room/RoomModal");
 const BookingModal = require("./UserBookingModal");
 const ActualRoom = require("../Rooms/RoomsModal");
 const UserRoomMappingModel = require("../UserRoomMapping/UserRoomMappingModel");
-const { default: mongoose } = require("mongoose");
 
 const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
 const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
@@ -464,9 +464,62 @@ const editRoomNewUser = async (req, res) => {
   }
 };
 
+const deleteBookedRoom = async (req, res) => {
+  try {
+    const { userId, roomId, bhavanId } = req.params;
+    if (!userId || !roomId || !bhavanId) {
+      throw new Error("UserId,RoomId and BhavanId is required");
+    }
+
+    const deleteUserMapping = await UserRoomMappingModel.findOneAndDelete({
+      userId,
+      roomId,
+      bhavanId,
+    });
+    if (!deleteUserMapping) {
+      throw new Error("User Mapping Delete operation failed");
+    }
+
+    await ActualRoom.findOne({
+      _id: roomId,
+    }).then((getRes) => {
+      if (getRes.bookerIds.length > 0) {
+        let remove = true;
+        const filteredBookerId = getRes.bookerIds.filter((m) => {
+          if (remove && m.id.toString() === userId) {
+            remove = false;
+            return false;
+          } else {
+            return true;
+          }
+        });
+        getRes.bookerIds = filteredBookerId;
+        // console.log(getRes.bookerIds, " <>?");
+        return getRes.save();
+      }
+    });
+
+    const updateUserBooking = await BookingModal.findOne({ _id: userId }).then(
+      (getUserRes) => {
+        getUserRes.familyMember = getUserRes.familyMember - 1;
+        getUserRes.memberAllotted = getUserRes.memberAllotted - 1;
+        console.log(getUserRes);
+        return getUserRes.save();
+      }
+    );
+    if (updateUserBooking) {
+      return res.status(200).send(userId);
+    }
+  } catch (error) {
+    console.log(error);
+    res.status(500).send(error);
+  }
+};
+
 module.exports = {
   addBooking,
   deleteBooking,
+  deleteBookedRoom,
   editRoomNewUser,
   editRoom,
   getBookedRooms,
