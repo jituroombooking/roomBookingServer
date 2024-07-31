@@ -17,7 +17,7 @@ router.post("/addBooking", upload, Booking.addBooking);
 router.get("/getRooms", Booking.getBookedRooms);
 router.delete("/deleteBookedRoom/:deleteId", Booking.deleteBooking);
 router.get("/unAlottedMember", Booking.getUnAlottedMember);
-router.put("/editRoom", Booking.editRoom);
+router.put("/editRoom", upload, Booking.editRoom);
 router.put("/editRoomWithNewUser", upload, Booking.editRoomNewUser);
 router.delete(
   "/deleteRoom/:userId/:roomId/:bhavanId",
