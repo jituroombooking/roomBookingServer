@@ -168,6 +168,10 @@ const viewSingleRoom = async (req, res, next) => {
   try {
     const bookerData = [];
     const { roomId } = req.params;
+    console.log(
+      roomId,
+      " <>????????????????????????????????????????????????????????"
+    );
     const roomData = await ActualRoomsModal.aggregate([
       {
         $match: {
@@ -195,7 +199,7 @@ const viewSingleRoom = async (req, res, next) => {
             }
           })
           .catch((err) => {
-            throw "find operation failed";
+            throw err;
           });
       });
     } else {
@@ -203,6 +207,7 @@ const viewSingleRoom = async (req, res, next) => {
     }
   } catch (error) {
     console.log(error, " MAIN");
+    res.status(500).send(error);
   }
 };
 

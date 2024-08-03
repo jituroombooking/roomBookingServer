@@ -85,7 +85,6 @@ const getLabourList = async (req, res) => {
 
 const markAttendence = async (req, res) => {
   try {
-    console.log(req.body);
     await LabourAttendenceModal.replaceOne(
       {
         labourId: req.body.data,
@@ -141,7 +140,6 @@ const deleteLabour = async (req, res) => {
 
 const updateLabour = async (req, res) => {
   try {
-    console.log(req.body);
     let updatedId = "";
     if (req.file) {
       let fileName = req.file.originalname.split(".");
@@ -192,7 +190,6 @@ const updateLabour = async (req, res) => {
 
 const markAsPaid = async (req, res) => {
   try {
-    console.log(req.body);
     const { firstDay, ...restProps } = req.body;
     restProps.monthPaid.push(firstDay);
     await LabourModal.findOneAndUpdate({ _id: restProps._id }, { ...restProps })

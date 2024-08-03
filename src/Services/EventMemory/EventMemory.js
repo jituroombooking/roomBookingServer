@@ -82,7 +82,6 @@ const getEventMemory = async (req, res) => {
 
 const editEventMemory = async (req, res) => {
   try {
-    console.log(req.body);
     let newImageName = "";
     if (req.file) {
       let fileName = req.file.originalname.split(".");

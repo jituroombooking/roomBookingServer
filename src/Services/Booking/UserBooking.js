@@ -321,17 +321,11 @@ const editRoom = async (req, res) => {
       removePosition,
       familyMember,
       mobileNumber,
+      newFamilyMember,
     } = req.body;
 
-    if (
-      !roomId ||
-      !userId ||
-      !bookingFrom ||
-      !bookingTill ||
-      typeof removePosition === "undefined" ||
-      !bhavanId
-    ) {
-      throw "roomId, userId,  bookingFrom, bookingTill or removePosition  is required ";
+    if (!roomId || !bookingFrom || !bookingTill || !bhavanId) {
+      throw "roomId,  bookingFrom, bookingTill   is required ";
     }
 
     if (req.file) {
@@ -400,38 +394,70 @@ const editRoom = async (req, res) => {
           res.status(200).send("Room Edited Successfully");
         });
     } else {
-      const updatedUserRoomMapping =
-        await UserRoomMappingModel.findOneAndUpdate(
-          { roomId: roomId, userId: userId },
-          { $set: { userId: new mongoose.Types.ObjectId(newUserId) } },
-          { new: true }
-        );
-      if (!updatedUserRoomMapping) {
-        return res.status(404).send("Room not found");
-      }
       const actualRoom = await ActualRoom.findOne({ _id: req.body.roomId });
       if (!actualRoom) {
         return res.status(404).send("Room not found");
       }
 
-      actualRoom.bookerIds[removePosition] = {
-        id: new mongoose.Types.ObjectId(newUserId),
-        bookingFrom,
-        bookingTill,
-      };
+      if (newFamilyMember && newFamilyMember > 0) {
+        const UserRoomMappingModelArr = Array.from(
+          { length: newFamilyMember },
+          () => ({
+            roomId,
+            userId: newUserId,
+            bhavanId,
+          })
+        );
+        const actualRoomArr = Array.from({ length: newFamilyMember }, () => ({
+          id: new mongoose.Types.ObjectId(newUserId),
+          bookingFrom,
+          bookingTill,
+        }));
+        if (
+          UserRoomMappingModelArr.length === 0 &&
+          actualRoomArr.length === 0
+        ) {
+          return res.status(400).send("Data is not provided!");
+        }
+        await UserRoomMappingModel.insertMany(UserRoomMappingModelArr);
 
-      actualRoom.save();
-      await BookingModal.findOneAndUpdate(
-        { _id: newUserId },
-        { $inc: { memberAllotted: 1 } }
-      );
+        actualRoom.bookerIds.push(...actualRoomArr);
+        await actualRoom.save();
 
-      await BookingModal.findOneAndUpdate(
-        { _id: userId },
-        { $inc: { memberAllotted: -1, familyMember: -1 } }
-      );
-
-      res.status(200).send(updatedUserRoomMapping);
+        await BookingModal.findOneAndUpdate(
+          { _id: newUserId },
+          { $inc: { memberAllotted: parseInt(newFamilyMember) } }
+        );
+        res.status(200).send("Room updated sucessfully !");
+      } else {
+        if (!userId || !removePosition) {
+          return res.status(400).send("userId or removePosition is Required !");
+        }
+        const updatedUserRoomMapping =
+          await UserRoomMappingModel.findOneAndUpdate(
+            { roomId: roomId, userId: userId },
+            { $set: { userId: new mongoose.Types.ObjectId(newUserId) } },
+            { new: true }
+          );
+        if (!updatedUserRoomMapping) {
+          return res.status(404).send("Room not found");
+        }
+        actualRoom.bookerIds[removePosition] = {
+          id: new mongoose.Types.ObjectId(newUserId),
+          bookingFrom,
+          bookingTill,
+        };
+        actualRoom.save();
+        await BookingModal.findOneAndUpdate(
+          { _id: newUserId },
+          { $inc: { memberAllotted: 1 } }
+        );
+        await BookingModal.findOneAndUpdate(
+          { _id: userId },
+          { $inc: { memberAllotted: -1, familyMember: -1 } }
+        );
+        res.status(200).send(updatedUserRoomMapping);
+      }
     }
   } catch (error) {
     console.log(error);
