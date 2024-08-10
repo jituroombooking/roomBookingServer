@@ -219,23 +219,30 @@ const getBookedRooms = async (req, res) => {
     ])
       .then((getRes) => {
         const finalData = new Map();
+        const roomMap = new Map();
+        const bhavanMap = new Map();
         getRes.map((m) => {
           if (!finalData.get(m.userId.toString())) {
-            const { roomData, userBookingData, bhavanData, ...restProps } = m;
+            const { roomData, bhavanData, ...restProps } = m;
+            roomMap.set(roomData._id.toString(), roomData);
+            bhavanMap.set(bhavanData._id.toString(), bhavanData);
             finalData.set(m.userId.toString(), {
               roomData: [roomData],
-              userBookingData,
               bhavanData: [bhavanData],
               ...restProps,
             });
-          } else if (
-            finalData.get(m.userId.toString()).userId.toString() ===
-            m.userId.toString()
-          ) {
+          } else {
             const { roomData, userBookingData, bhavanData, ...restProps } =
               finalData.get(m.userId.toString());
-            roomData.push(m.roomData);
-            bhavanData.push(m.bhavanData);
+
+            if (!roomMap.get(m.roomData._id.toString())) {
+              roomData.push(m.roomData);
+              roomMap.set(m.roomData._id.toString(), m.roomData);
+            }
+            if (!bhavanMap.get(m.bhavanData._id.toString())) {
+              bhavanData.push(m.bhavanData);
+              bhavanMap.set(m.bhavanData._id.toString(), m.bhavanData);
+            }
             finalData.set(m.userId.toString(), {
               roomData,
               userBookingData,
@@ -248,20 +255,12 @@ const getBookedRooms = async (req, res) => {
         const resArray = Array.from(finalData, ([name, value]) => ({
           ...value,
         }));
-
+        // res.status(200).send({ resArray, data: getRes });
         res.status(200).send(resArray);
       })
       .catch((err) => {
         throw "get room booking operation failed";
       });
-
-    // await BookingModal.find({})
-    //   .then((dbRes) => {
-    //     res.status(200).send(dbRes);
-    //   })
-    //   .catch((err) => {
-    //     throw "get room bboking operation failed";
-    //   });
   } catch (error) {
     console.log(error);
     res.status(500).send(error);

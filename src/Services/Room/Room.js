@@ -4,6 +4,7 @@ const { APIError, STATUS_CODES } = require("../../util/app-errors");
 const RoomModal = require("../Room/RoomModal");
 const ActualRoomsModal = require("../Rooms/RoomsModal");
 const UserBooking = require("../Booking/UserBookingModal");
+const UserRoomMappingModel = require("../UserRoomMapping/UserRoomMappingModel");
 
 const addRoom = async (req, res) => {
   try {
@@ -137,27 +138,63 @@ const updateRoom = async (req, res) => {
 };
 
 const deleteRoom = async (req, res) => {
+  //current work
   try {
-    if (!req.params.deleteId) {
-      throw "Id is required for updating";
+    const { deleteId } = req.params;
+    if (!deleteId) {
+      return res.status(400).send("Id is required for deleting");
     }
-    await RoomModal.findOneAndDelete({
-      _id: req.params.deleteId,
-    })
-      .then(async (deleteRes) => {
-        await ActualRoomsModal.deleteMany({
-          bhavanId: req.params.deleteId,
-        })
-          .then((deleteActualRoomRes) => {
-            res.status(200).send(req.params.deleteId);
-          })
-          .catch((error) => {
-            throw error;
-          });
-      })
-      .catch((error) => {
-        throw "Delete operation failed";
-      });
+    const userMap = new Map();
+
+    const userIdInBhavn = await UserRoomMappingModel.find({
+      bhavanId: deleteId,
+    });
+    if (!userIdInBhavn) {
+      return res.status(400).send("Getting user filed");
+    }
+
+    userIdInBhavn.map((m) => {
+      userMap.set(
+        m.userId.toString(),
+        (userMap.get(m.userId.toString()) || 0) + 1
+      );
+    });
+
+    const finalArray = Array.from(userMap, ([name, value]) => ({
+      id: name,
+      count: value,
+    }));
+
+    const [roomDelete, actualRoomDelete, deleteUserBooking] = await Promise.all(
+      [
+        RoomModal.findOneAndDelete({
+          _id: deleteId,
+        }),
+        ActualRoomsModal.deleteMany({
+          bhavanId: deleteId,
+        }),
+        UserRoomMappingModel.deleteMany({
+          bhavanId: deleteId,
+        }),
+      ]
+    );
+
+    if (!roomDelete) {
+      return res.status(400).send("room Delete failed");
+    }
+    if (actualRoomDelete.deleteCount === 0) {
+      return res.status(400).send("Actual Room Delete failed");
+    }
+    if (deleteUserBooking.deleteCount === 0) {
+      return res.status(400).send("user Mapping Delete failed");
+    }
+    finalArray.map(async ({ id, count }) => {
+      await UserBooking.findOneAndUpdate(
+        { _id: new mongoose.Types.ObjectId(id) },
+        { $inc: { memberAllotted: -count } }
+      );
+    });
+    res.status(200).send(deleteId);
   } catch (error) {
     res.status(500).send(error);
   }
@@ -168,10 +205,6 @@ const viewSingleRoom = async (req, res, next) => {
   try {
     const bookerData = [];
     const { roomId } = req.params;
-    console.log(
-      roomId,
-      " <>????????????????????????????????????????????????????????"
-    );
     const roomData = await ActualRoomsModal.aggregate([
       {
         $match: {
