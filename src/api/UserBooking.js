@@ -16,12 +16,16 @@ const router = express.Router();
 router.post("/addBooking", upload, Booking.addBooking);
 router.get("/getRooms", Booking.getBookedRooms);
 router.delete("/deleteBookedRoom/:deleteId", Booking.deleteBooking);
-router.get("/unAlottedMember", Booking.getUnAlottedMember);
+router.get(
+  "/unAlottedMember/:currentPage/:pageSize",
+  Booking.getUnAlottedMember
+);
 router.put("/editRoom", upload, Booking.editRoom);
 router.put("/editRoomWithNewUser", upload, Booking.editRoomNewUser);
 router.delete(
   "/deleteRoom/:userId/:roomId/:bhavanId",
   Booking.deleteBookedRoom
 );
+router.post("/bulkUpload", Booking.bulkUpload);
 
 module.exports = router;

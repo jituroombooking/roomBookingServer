@@ -83,7 +83,7 @@ const addBooking = async (req, res, next) => {
 
           const actualRooms = await ActualRoom.find({ availabel: true });
           let finalFamilyNum = parseInt(familyMember);
-          if (parseInt(familyMember) !== 0 && actualRooms) {
+          if (parseInt(familyMember) !== 0 && actualRooms.length > 0) {
             actualRooms.map(async (m) => {
               let Obj = m.bookerIds;
               const bookedNumber = m.bookerIds.length;
@@ -285,6 +285,30 @@ const deleteBooking = async (req, res) => {
 
 const getUnAlottedMember = async (req, res) => {
   try {
+    const { currentPage, pageSize } = req.params;
+    if (!currentPage || !pageSize) {
+      return res.status(400).send("Page Number or Page size was not provided");
+    }
+    const parsedPageSize = parseInt(pageSize);
+
+    const [totalCountData] = await BookingModal.aggregate([
+      {
+        $match: {
+          $expr: {
+            $ne: ["$familMember", "$memberAllotted"],
+          },
+        },
+      },
+      { $count: "totalDocument" },
+    ]);
+
+    const totalCount = totalCountData.totalDocument
+      ? totalCountData.totalDocument
+      : 0;
+    const totalPages = Math.ceil(totalCount / parsedPageSize);
+
+    const itemToSkip = (currentPage - 1) * pageSize;
+
     await BookingModal.aggregate([
       {
         $match: {
@@ -293,10 +317,17 @@ const getUnAlottedMember = async (req, res) => {
           },
         },
       },
+      { $sort: { familyMember: -1 } },
+      { $skip: itemToSkip },
+      { $limit: parsedPageSize },
     ])
-      .sort({ familyMember: -1 })
       .then((getRes) => {
-        res.status(200).send(getRes);
+        res.status(200).send({
+          data: getRes,
+          totalDocument: totalCount,
+          lastPage: totalPages,
+          currentPage,
+        });
       })
       .catch((err) => {
         throw err;
@@ -615,8 +646,24 @@ const deleteBookedRoom = async (req, res) => {
   }
 };
 
+const bulkUpload = async (req, res) => {
+  try {
+    const { bulkUploadData } = req.body;
+    if (!bulkUploadData || bulkUploadData.length === 0) {
+      return res.status(400).send("Data is empty");
+    }
+    await BookingModal.insertMany(bulkUploadData);
+    res.status(200).send(bulkUploadData);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send(error);
+  }
+  res.end();
+};
+
 module.exports = {
   addBooking,
+  bulkUpload,
   deleteBooking,
   deleteBookedRoom,
   editRoomNewUser,

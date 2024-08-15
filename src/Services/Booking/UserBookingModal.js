@@ -11,6 +11,7 @@ const bookModel = mongoose.Schema({
   },
   identityProof: {
     type: String,
+    default: "",
   },
   bookingFrom: {
     type: Date,
