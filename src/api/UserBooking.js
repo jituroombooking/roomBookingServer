@@ -14,6 +14,8 @@ const Booking = require("../Services/Booking/UserBooking");
 const router = express.Router();
 
 router.post("/addBooking", upload, Booking.addBooking);
+router.put("/updateBooking", upload, Booking.updateBooking);
+router.post("/autoAssign", Booking.autoAssignRoom);
 router.get("/getRooms", Booking.getBookedRooms);
 router.delete("/deleteBookedRoom/:deleteId", Booking.deleteBooking);
 router.get(

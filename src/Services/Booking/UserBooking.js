@@ -18,11 +18,75 @@ const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
 const region = process.env.REGION;
 const Bucket = process.env.BUCKET;
 
+const updateBooking = async (req, res) => {
+  try {
+    const {
+      _id,
+      fullName,
+      familyMember,
+      identityProof,
+      bookingFrom,
+      bookingTill,
+      mobileNumber,
+    } = req.body;
+    if (
+      fullName === "" ||
+      familyMember === 0 ||
+      bookingFrom === "" ||
+      bookingTill === "" ||
+      mobileNumber === "" ||
+      _id === ""
+    ) {
+      return res.status(400).send("Please send the required data");
+    }
+    let imageName = identityProof;
+    if (req.file) {
+      let fileName = req.file.originalname.split(".");
+      const myFileType = fileName[fileName.length - 1];
+      imageName = `${uuidv4()}.${myFileType}`;
+      const Key = `userbooking/${imageName}`;
+      new Upload({
+        client: new S3Client({
+          credentials: {
+            accessKeyId,
+            secretAccessKey,
+          },
+          region,
+        }),
+        params: {
+          ACL: "public-read-write",
+          Bucket,
+          Key,
+          Body: req.file.buffer,
+          ContentType: req.file.mimetype,
+        },
+      })
+        .done()
+        .then(async (data) => {});
+    }
+    const userBookingModal = await BookingModal.findByIdAndUpdate(_id, {
+      fullName,
+      familyMember,
+      bookingFrom,
+      bookingTill,
+      mobileNumber,
+      identityProof: imageName,
+    });
+    if (!userBookingModal) {
+      return res
+        .status(500)
+        .send("insert Operation failed for User room booking");
+    }
+    res.status(200).send("Booking Updated");
+  } catch (error) {
+    console.log(error);
+    res.status(500).send(error);
+  }
+  res.end();
+};
+
 const addBooking = async (req, res, next) => {
   try {
-    const userRoomMapping = [];
-    const updatedArray = [];
-
     if (req.file) {
       let fileName = req.file.originalname.split(".");
       const myFileType = fileName[fileName.length - 1];
@@ -49,7 +113,6 @@ const addBooking = async (req, res, next) => {
           const {
             fullName,
             familyMember,
-            identityProof,
             bookingFrom,
             bookingTill,
             mobileNumber,
@@ -61,9 +124,7 @@ const addBooking = async (req, res, next) => {
             bookingTill === "" ||
             mobileNumber === ""
           ) {
-            res.status(400).send("Please send the required data");
-            res.end();
-            return;
+            return res.status(400).send("Please send the required data");
           }
           const userBookingModal = await BookingModal.insertMany({
             fullName,
@@ -81,101 +142,110 @@ const addBooking = async (req, res, next) => {
             return;
           }
 
-          const actualRooms = await ActualRoom.find({ availabel: true });
-          let finalFamilyNum = parseInt(familyMember);
-          if (parseInt(familyMember) !== 0 && actualRooms.length > 0) {
-            actualRooms.map(async (m) => {
-              let Obj = m.bookerIds;
-              const bookedNumber = m.bookerIds.length;
-              const availableBed = m.noOfBed - bookedNumber;
-              const userRoomMappingObj = {};
-              if (availableBed > 0) {
-                for (let i = 0; i < availableBed; i++) {
-                  if (finalFamilyNum > 0) {
-                    if (
-                      userRoomMapping.length === 0 ||
-                      userRoomMapping.some((item) => {
-                        return item.roomId.toString() !== m._id.toString();
-                      })
-                    ) {
-                      userRoomMappingObj.bhavanId = m.bhavanId;
-                      userRoomMappingObj.roomId = m._id;
-                      userRoomMappingObj.userId = userBookingModal[0]._id;
-                      userRoomMapping.push(userRoomMappingObj);
-                    }
-                    finalFamilyNum = finalFamilyNum - 1;
-                    Obj.push({
-                      id: userBookingModal[0]._id,
-                      bookingFrom,
-                      bookingTill,
-                    });
-                  }
-                }
-                updatedArray.push({
-                  _id: m._id,
-                  roomNumber: m.roomNumber,
-                  noOfBed: m.noOfBed,
-                  // availabel: availableBed > 1,
-                  availabel: m.noOfBed > Obj.length,
-                  used: m.used,
-                  bookedFrom: m.bookedFrom,
-                  bookedTill: m.bookedTill,
-                  bookerIds: [...Obj],
-                  bhavanId: m.bhavanId,
-                });
-              }
-            });
+          addbookingMethod(
+            req,
+            res,
+            familyMember,
+            userBookingModal[0]._id,
+            bookingFrom,
+            bookingTill
+          );
 
-            let count = 0;
-            updatedArray.map(async (updateM) => {
-              await ActualRoom.findByIdAndUpdate(
-                { _id: updateM._id },
-                {
-                  availabel: updateM.availabel,
-                  used: updateM.used,
-                  bookedFrom: updateM.bookedFrom,
-                  bookedTill: updateM.bookedTill,
-                  bookerIds: [...updateM.bookerIds],
-                }
-              )
-                .then((res) => {})
-                .catch((err) => {
-                  res
-                    .status(500)
-                    .send("insert Operation failed for Room booking");
-                  res.end();
-                  return;
-                });
-            });
-            const remaningMemberinsert = await BookingModal.findByIdAndUpdate(
-              {
-                _id: userBookingModal[0]._id,
-              },
-              {
-                memberAllotted: familyMember - finalFamilyNum,
-              }
-            );
-            if (!remaningMemberinsert) {
-              res
-                .status(500)
-                .send(
-                  "insert Operation failed for User booking remaining member"
-                );
-              res.end();
-              return;
-            }
-            await UserRoomMappingModel.insertMany(userRoomMapping)
-              .then((insertRes) => {
-                res.status(200).send("insert Operation Sucessfull");
-              })
-              .catch((err) => {
-                throw err;
-              });
-          } else {
-            res.status(400).send("Getting room data failed");
-            res.end();
-            return;
-          }
+          // const actualRooms = await ActualRoom.find({ availabel: true });
+          // let finalFamilyNum = parseInt(familyMember);
+          // if (parseInt(familyMember) !== 0 && actualRooms.length > 0) {
+          //   actualRooms.map(async (m) => {
+          //     let Obj = m.bookerIds;
+          //     const bookedNumber = m.bookerIds.length;
+          //     const availableBed = m.noOfBed - bookedNumber;
+          //     const userRoomMappingObj = {};
+          //     if (availableBed > 0) {
+          //       for (let i = 0; i < availableBed; i++) {
+          //         if (finalFamilyNum > 0) {
+          //           if (
+          //             userRoomMapping.length === 0 ||
+          //             userRoomMapping.some((item) => {
+          //               return item.roomId.toString() !== m._id.toString();
+          //             })
+          //           ) {
+          //             userRoomMappingObj.bhavanId = m.bhavanId;
+          //             userRoomMappingObj.roomId = m._id;
+          //             userRoomMappingObj.userId = userBookingModal[0]._id;
+          //             userRoomMapping.push(userRoomMappingObj);
+          //           }
+          //           finalFamilyNum = finalFamilyNum - 1;
+          //           Obj.push({
+          //             id: userBookingModal[0]._id,
+          //             bookingFrom,
+          //             bookingTill,
+          //           });
+          //         }
+          //       }
+          //       updatedArray.push({
+          //         _id: m._id,
+          //         roomNumber: m.roomNumber,
+          //         noOfBed: m.noOfBed,
+          //         // availabel: availableBed > 1,
+          //         availabel: m.noOfBed > Obj.length,
+          //         used: m.used,
+          //         bookedFrom: m.bookedFrom,
+          //         bookedTill: m.bookedTill,
+          //         bookerIds: [...Obj],
+          //         bhavanId: m.bhavanId,
+          //       });
+          //     }
+          //   });
+
+          //   let count = 0;
+          //   updatedArray.map(async (updateM) => {
+          //     await ActualRoom.findByIdAndUpdate(
+          //       { _id: updateM._id },
+          //       {
+          //         availabel: updateM.availabel,
+          //         used: updateM.used,
+          //         bookedFrom: updateM.bookedFrom,
+          //         bookedTill: updateM.bookedTill,
+          //         bookerIds: [...updateM.bookerIds],
+          //       }
+          //     )
+          //       .then((res) => {})
+          //       .catch((err) => {
+          //         res
+          //           .status(500)
+          //           .send("insert Operation failed for Room booking");
+          //         res.end();
+          //         return;
+          //       });
+          //   });
+          //   const remaningMemberinsert = await BookingModal.findByIdAndUpdate(
+          //     {
+          //       _id: userBookingModal[0]._id,
+          //     },
+          //     {
+          //       memberAllotted: familyMember - finalFamilyNum,
+          //     }
+          //   );
+          //   if (!remaningMemberinsert) {
+          //     res
+          //       .status(500)
+          //       .send(
+          //         "insert Operation failed for User booking remaining member"
+          //       );
+          //     res.end();
+          //     return;
+          //   }
+          //   await UserRoomMappingModel.insertMany(userRoomMapping)
+          //     .then((insertRes) => {
+          //       res.status(200).send("insert Operation Sucessfull");
+          //     })
+          //     .catch((err) => {
+          //       throw err;
+          //     });
+          // } else {
+          //   res.status(400).send("Getting room data failed");
+          //   res.end();
+          //   return;
+          // }
         });
     } else {
       throw "Image is not provided";
@@ -661,8 +731,37 @@ const bulkUpload = async (req, res) => {
   res.end();
 };
 
+const autoAssignRoom = (req, res) => {
+  try {
+    const {
+      _id,
+      fullName,
+      familyMember,
+      bookingFrom,
+      bookingTill,
+      mobileNumber,
+    } = req.body;
+    if (
+      _id === "" ||
+      fullName === "" ||
+      familyMember === 0 ||
+      bookingFrom === "" ||
+      bookingTill === "" ||
+      mobileNumber === ""
+    ) {
+      return res.status(400).send("Please send the required data");
+    }
+    addbookingMethod(req, res, familyMember, _id, bookingFrom, bookingTill);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send(error);
+  }
+  res.end();
+};
+
 module.exports = {
   addBooking,
+  autoAssignRoom,
   bulkUpload,
   deleteBooking,
   deleteBookedRoom,
@@ -670,4 +769,91 @@ module.exports = {
   editRoom,
   getBookedRooms,
   getUnAlottedMember,
+  updateBooking,
+};
+
+const addbookingMethod = async (
+  req,
+  res,
+  familyMember,
+  userId,
+  bookingFrom,
+  bookingTill
+) => {
+  try {
+    const actualRooms = await ActualRoom.find({ availabel: true });
+    let finalFamilyNum = parseInt(familyMember);
+    if (finalFamilyNum === 0 || actualRooms.length === 0) {
+      return res
+        .status(400)
+        .send("Invalid family member count or no Empty Room");
+    }
+    const userRoomMapping = [];
+    const updatedArray = [];
+
+    for (const m of actualRooms) {
+      let Obj = m.bookerIds;
+      const bookedNumber = m.bookerIds.length;
+      const availableBed = m.noOfBed - bookedNumber;
+      const userRoomMappingObj = {};
+      if (availableBed > 0) {
+        for (let i = 0; i < availableBed; i++) {
+          if (finalFamilyNum > 0) {
+            if (
+              userRoomMapping.length === 0 ||
+              userRoomMapping.some((item) => {
+                return item.roomId.toString() !== m._id.toString();
+              })
+            ) {
+              userRoomMappingObj.bhavanId = m.bhavanId;
+              userRoomMappingObj.roomId = m._id;
+              userRoomMappingObj.userId = userId;
+              userRoomMapping.push(userRoomMappingObj);
+            }
+            finalFamilyNum = finalFamilyNum - 1;
+            Obj.push({
+              id: userId,
+              bookingFrom,
+              bookingTill,
+            });
+          }
+        }
+        updatedArray.push({
+          _id: m._id,
+          roomNumber: m.roomNumber,
+          noOfBed: m.noOfBed,
+          // availabel: availableBed > 1,
+          availabel: m.noOfBed > Obj.length,
+          used: m.used,
+          bookedFrom: m.bookedFrom,
+          bookedTill: m.bookedTill,
+          bookerIds: [...Obj],
+          bhavanId: m.bhavanId,
+        });
+      }
+    }
+
+    updatedArray.map(async (updateM) => {
+      await ActualRoom.findByIdAndUpdate(updateM._id, {
+        availabel: updateM.availabel,
+        used: updateM.used,
+        bookedFrom: updateM.bookedFrom,
+        bookedTill: updateM.bookedTill,
+        bookerIds: [...updateM.bookerIds],
+      });
+    });
+    const remaningMemberinsert = await BookingModal.findByIdAndUpdate(userId, {
+      memberAllotted: familyMember - finalFamilyNum,
+    });
+    if (!remaningMemberinsert) {
+      return res
+        .status(500)
+        .send("insert Operation failed for User booking remaining member");
+    }
+    await UserRoomMappingModel.insertMany(userRoomMapping);
+  } catch (error) {
+    console.log(error);
+    res.status(500).send("Internal Server Error");
+  }
+  res.end();
 };
